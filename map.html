@@ -5,14 +5,6 @@
   <meta charset="utf-8">
   <title>Directions to Bethany's Pie Shop!</title>
   <link rel="stylesheet" type="text/css" href="styles/site-display.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.2.1/css/ol.css"
-    type="text/css">
-  <style>
-    .map {
-      height: 400px;
-      width: 100%;
-    }
-  </style>
 </head>
 
 <body>
@@ -23,7 +15,7 @@
         <li><a href="index.html">Home</a></li>
         <li><a href="#">All pies</a></li>
         <li><a href="#">About</a></li>
-        <li><a href="#" onclick="drawMap();">Map</a></li>
+        <li><a href="map.html">Map</a></li>
       </ul>
     </nav>
   </header>
@@ -47,6 +39,12 @@
     </aside>
     <main id="main">
       <div id="map" class="map"></div>
+      <br />
+      <button onclick="gmapController.addUserLocation()">
+        Where Are You?
+      </button>
+
+      <div id="errorArea" class="alert d-none"></div>
     </main>
 
     <footer>
@@ -58,54 +56,133 @@
     </footer>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.js"></script>
-  
+  <script src="scripts/loadGoogleMaps.js" type="text/javascript"></script>
   <script>
     'use strict';
-
-    let map = null;
-    let bethanyMap = {
-      "latitude": 36.036020,
-      "longitude": -86.787600
-    };
-
     window.onload = function () {
-      drawMap(bethanyMap);
+      loadGoogleMaps();
     };
 
-    function drawMap(mapObject) {
-      // Create new Open Layer map
-      map = new ol.Map({
-        target: 'map',
-        layers: [
-          new ol.layer.Tile({
-            source: new ol.source.OSM()
-          })
-        ],
-        view: new ol.View({
-          center: ol.proj.fromLonLat([mapObject.longitude, mapObject.latitude]),
-          zoom: 18
-        })
-      });
+    var gmapController = (function () {
+      // ************************************
+      // Private Variables
+      // ************************************
+      let map = null;
+      let infoWindow = null;
+      let mapObjects = [];
 
-      drawMarker(mapObject);
-    }
+      // ******************************
+      // Private Functions
+      // ******************************
+      function initialize() {
+        // Create new InfoWindow object
+        infoWindow = new google.maps.InfoWindow();
 
-    function drawMarker(mapObject) {
-      // Add a "marker" on the pie shop
-      let layer = new ol.layer.Vector({
-        source: new ol.source.Vector({
-          features: [
-            new ol.Feature({
-              geometry: new ol.geom.Point(
-                ol.proj.fromLonLat([mapObject.longitude, mapObject.latitude]))
-            })
-          ]
-        })
-      });
-      map.addLayer(layer);
-    }
+        // Add pie shop object
+        mapObjects.push({
+          "lat": 36.036020,
+          "lng": -86.787600,
+          "marker": null,
+          "title": "Bethany's Pie Shop",
+          "infoContent": "<div class='info-window'><address>Bethany's Pie Shop<br/>117 Franklin Rd<br/>Brentwood, TN 37027</address></div>",
+          "infoIcon": "images/cherrypie.jpg"
+        });
+
+        // Draw the map
+        drawMap(mapObjects[0]);
+
+        // Draw other map objects
+        drawMapObjects();
+      }
+
+      function drawMapObjects() {
+        // Create a lat/lng boundary
+        let bounds = new google.maps.LatLngBounds();
+        let i;
+
+        for (i = 0; i < mapObjects.length; i++) {
+          // Add marker for map object
+          mapObjects[i].marker = drawMarker(mapObjects[i]);
+          // Add info window for map object
+          addInfoWindow(mapObjects[i]);
+          // Extend boundaries to encompass marker
+          bounds.extend(mapObjects[i].marker.position);
+        }
+
+        // Fit the map to boundaries
+        if (mapObjects.length > 1) {
+          map.fitBounds(bounds);
+        }
+      }
+
+      function drawMap(mapObject) {
+        // Create map options
+        let mapOptions = {
+          center: new google.maps.LatLng(mapObject.lat, mapObject.lng),
+          zoom: 16,
+          mapTypeId: google.maps.MapTypeId.ROADMAP
+        };
+
+        // Create new google map
+        map = new google.maps.Map(document.getElementById("map"), mapOptions)
+      }
+
+      function drawMarker(mapObject) {
+        // Create a new marker since you may need more than one
+        let marker = new google.maps.Marker({
+          position: new google.maps.LatLng(mapObject.lat, mapObject.lng),
+          map: map,
+          title: mapObject.title,
+          icon: mapObject.infoIcon
+        });
+
+        // Add marker to the map
+        marker.setMap(map);
+        // marker.setIcon()
+
+        return marker;
+      }
+
+      function addInfoWindow(mapObject) {
+        // Add click event to marker
+        google.maps.event.addListener(mapObject.marker, 'click', function () {
+          // Add HTML content for window
+          infoWindow.setContent(mapObject.infoContent);
+          // Open the window
+          infoWindow.open(map, mapObject.marker)
+        });
+      }
+
+      function addUserLocation() {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(function (pos) {
+            mapObjects.push({
+              "lat": 36.0364274,
+              "lng": -86.7968576,
+              "marker": null,
+              "title": "Your Location",
+              "infoContent": "<div class='info-window'><p>This is your current location.</p></div>",
+              "infoIcon": "images/walking.jpg"
+            });
+
+            drawMapObjects();
+          });
+        }
+        else {
+          displayError("Please update your browser to use Geolocation.");
+        }
+      }
+
+      // ******************************
+      // Public Functions
+      // ******************************
+      return {
+        "initialize": initialize,
+        "addUserLocation": addUserLocation
+      }
+    })();
   </script>
+
 </body>
 
 </html>
