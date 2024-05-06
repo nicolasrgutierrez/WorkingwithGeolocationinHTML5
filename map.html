@@ -43,6 +43,14 @@
       <button onclick="gmapController.addUserLocation()">
         Where Are You?
       </button>
+      <br />
+      <label>Address: </label>
+      <input type="text" id="address" value="1 Cadillac Drive, Brentwood TN 37027">
+      <button onclick="gmapController.getDirections()">
+        Directions From Address
+      </button>
+      <div id="directionsArea">
+      </div>
 
       <div id="errorArea" class="alert d-none"></div>
     </main>
@@ -166,6 +174,7 @@
             });
 
             drawMapObjects();
+            getDirections(new google.maps.LatLng(mapObjects[1].lat, mapObjects[1].lng), new google.maps.LatLng(mapObjects[0].lat, mapObjects[0].lng));
           });
         }
         else {
@@ -173,12 +182,42 @@
         }
       }
 
+      function getDirections(from, to) {
+        let directionsService = new google.maps.DirectionsService();
+        let directionsRenderer = new google.maps.DirectionsRenderer();
+
+        // Set route of how to travel form point A to B
+        directionsService.route(
+          {
+            origin: from,
+            destination: to, 
+            travelMode: 'DRIVING',
+            provideRouteAlternatives: true
+          },
+          function (response, status) {
+            if (status === 'OK') {
+              directionsRenderer.setDirections(response);
+              // Render directions on the map
+              directionsRenderer.setMap(map);
+              // Call setPanel() to display text directions
+              directionsRenderer.setPanel(
+                document.getElementById("directionsArea"));
+            } else {
+              displayError('Direstions request failed due to ' + status);
+            }
+          }
+        )
+      }
+
       // ******************************
       // Public Functions
       // ******************************
       return {
         "initialize": initialize,
-        "addUserLocation": addUserLocation
+        "addUserLocation": addUserLocation,
+        "getDirections": function () {
+          getDirections(document.getElementById("address").value, "117 Franklin Rd, Brentwood TN 37027");
+        }
       }
     })();
   </script>
