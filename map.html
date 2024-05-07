@@ -49,6 +49,9 @@
       <button onclick="gmapController.getDirections()">
         Directions From Address
       </button>
+      <button onclick="gmapController.setMarkerOnAddress()">
+        Find Address
+      </button>
       <div id="directionsArea">
       </div>
 
@@ -78,6 +81,14 @@
       let map = null;
       let infoWindow = null;
       let mapObjects = [];
+      let addrMarker = null;
+      let deliveryArea = null;
+      let deliveryMeters = {
+        "north": 400,
+        "south": 1600,
+        "east": 1600,
+        "west": 1600
+      }
 
       // ******************************
       // Private Functions
@@ -101,6 +112,9 @@
 
         // Draw other map objects
         drawMapObjects();
+
+        // Draw a geofence around pie shop
+        drawFence(mapObjects[0]);
       }
 
       function drawMapObjects() {
@@ -151,6 +165,44 @@
         return marker;
       }
 
+      function drawFence(mapObject) {
+        // Create boundaries based on coordinates and # of meters
+        let bounds = makeDeliveryFence(
+          new google.maps.LatLng(mapObject.lat, mapObject.lng),
+          deliveryMeters);
+
+        // Draw the rectangle on the map
+        deliveryArea = new google.maps.Rectangle({
+          map: map,
+          bounds: bounds,
+          strokeColor: 'red',
+          strokeWidth: 2,
+          fillOpacity: 0
+        });
+
+        // Make sure rectangle is displayed on the map
+        map.fitBounds(bounds);
+      }
+
+      // Calculate boundaries around center point
+      // NOTE: North = 0, East = 90, South = 180, West = -90
+      function makeDeliveryFence(point, fence) {
+        //shorten the function name
+        let computeOffset = google.maps.geometry.spherical.computeOffset;
+
+        // Make a new point north
+        var n = computeOffset(point, fence.north, 0);
+        // Make a new point north-east
+        var ne = computeOffset(n, fence.east, 90);
+        
+        // Make a new point south
+        var s = computeOffset(point, fence.south, 180);
+        // Make a new point west
+        var sw = computeOffset(s, fence.west, -90);
+
+        return new google.maps.LatLngBounds(sw, ne);
+      }
+
       function addInfoWindow(mapObject) {
         // Add click event to marker
         google.maps.event.addListener(mapObject.marker, 'click', function () {
@@ -190,7 +242,7 @@
         directionsService.route(
           {
             origin: from,
-            destination: to, 
+            destination: to,
             travelMode: 'DRIVING',
             provideRouteAlternatives: true
           },
@@ -209,6 +261,79 @@
         )
       }
 
+      function setMarkerOnAddress(address) {
+        var geocoder = new google.maps.Geocoder();
+
+        if (address.length > 0) {
+          geocoder.geocode({ 'address': address }, function (results, status) {
+            switch (status) {
+              case google.maps.GeocoderStatus.OK:
+                if (results[0]) {
+                  let mapObject = {
+                    "lat": results[0].geometry.location.lat(),
+                    "lng": results[0].geometry.location.lng(),
+                    "marker": null,
+                    "title": address,
+                    "infoContent": null,
+                    "infoIcon": null
+                  }
+                  // Remove any previous address marker
+                  if (addrMarker) {
+                    addrMarker.setMap(null);
+                  }
+
+                  // Set marker on map
+                  addrMarker = drawMarker(mapObject);
+
+                  // Get existing map boundaries
+                  let bounds = map.getBounds();
+
+                  // Extend boundaries to encompass new marker
+                  bounds.extend(addrMarker.position);
+
+                  // Make sure rectangle is displayed on the map
+                  map.fitBounds(bounds);    
+                  
+                  // Chec if marker is within delivery bounds
+                  if (!deliveryArea.getBounds().contains(addrMarker.position)) {
+                    displayError("Address is NOT within delivery area");
+                  }
+                }
+                else {
+                  displayError("Could not locate address.");
+                }
+                break;
+
+              case google.maps.GeocoderStatus.ZERO_RESULTS:
+                displayError("No such address found.");
+                break;
+
+              case google.maps.GeocoderStatus.OVER_QUERY_LIMIT:
+                displayError("Query limit has been exceeded.");
+                break;
+
+              case google.maps.GeocoderStatus.REQUEST_DENIED:
+                displayError("Query request was denied.");
+                break;
+
+              case google.maps.GeocoderStatus.INVALID_REQUEST:
+                displayError("Query request was invalid.");
+                break;
+
+              default:
+                displayError("Unknown status: " + status);
+                break;
+            }
+          });
+        }
+        else {
+          displayError("Please enter an address.")
+        }
+      }
+
+      function displayError(msg) {
+        alert(msg);
+      }
       // ******************************
       // Public Functions
       // ******************************
@@ -217,6 +342,9 @@
         "addUserLocation": addUserLocation,
         "getDirections": function () {
           getDirections(document.getElementById("address").value, "117 Franklin Rd, Brentwood TN 37027");
+        },
+        "setMarkerOnAddress": function () {
+          setMarkerOnAddress(document.getElementById("address").value);
         }
       }
     })();
